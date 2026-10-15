@@ -1,0 +1,79 @@
+name: Bug report
+description: Report incorrect behavior in Web Mock Studio.
+title: "[Bug]: "
+labels: ["bug", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for taking the time to report a problem. Please search existing issues first.
+        Do not include real API tokens, cookies or personal data in workspace exports or logs.
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What happened, and what did you expect to happen?
+      placeholder: A rule for /api/users/:id does not match /api/users/42 when ...
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Minimal steps from a fresh workspace.
+      placeholder: |
+        1. Create a rule with pattern ...
+        2. Send GET ... from the Request Runner
+        3. Observe ...
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Interception engine (Service Worker)
+        - Route matching
+        - Data Factory (schema inference or generation)
+        - cURL import or Request Runner
+        - Workspace import or export
+        - Code export (MSW or drop-in script)
+        - User interface or keyboard shortcuts
+        - Other
+    validations:
+      required: true
+  - type: dropdown
+    id: engine
+    attributes:
+      label: Engine mode shown in the sidebar
+      options:
+        - Service Worker
+        - In-page fetch
+        - Starting (never finished)
+        - Not sure
+    validations:
+      required: true
+  - type: input
+    id: browser
+    attributes:
+      label: Browser and version
+      placeholder: Chrome 141, Firefox 144, Safari 26
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Web Mock Studio version or commit
+      placeholder: v1.0.0, or the live demo
+  - type: textarea
+    id: workspace
+    attributes:
+      label: Minimal workspace export
+      description: Optional. Paste a trimmed workspace JSON that reproduces the issue.
+      render: json
+  - type: textarea
+    id: logs
+    attributes:
+      label: Console output
+      description: Optional. Errors from the browser DevTools console.
+      render: text
