@@ -1,0 +1,120 @@
+@import 'tailwindcss';
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  --wms-canvas: #f6f7f9;
+  --wms-panel: #ffffff;
+  --wms-subtle: #f1f3f6;
+  --wms-hover: #e9ecf1;
+  --wms-line: #e2e5ea;
+  --wms-line-strong: #cfd4dc;
+  --wms-fg: #11151c;
+  --wms-muted: #5c6573;
+  --wms-faint: #8b93a1;
+  --wms-accent: #2f6fed;
+  --wms-accent-fg: #ffffff;
+  --wms-accent-soft: #e6eefe;
+  --wms-ok: #0f9d58;
+  --wms-warn: #c27803;
+  --wms-bad: #d93025;
+  --wms-code: #fbfbfc;
+  color-scheme: light;
+}
+
+.dark {
+  --wms-canvas: #0b0d11;
+  --wms-panel: #12151b;
+  --wms-subtle: #171b22;
+  --wms-hover: #1e232c;
+  --wms-line: #232831;
+  --wms-line-strong: #323946;
+  --wms-fg: #e6e9ee;
+  --wms-muted: #9aa3b2;
+  --wms-faint: #6b7483;
+  --wms-accent: #5b8cff;
+  --wms-accent-fg: #0b0d11;
+  --wms-accent-soft: #1a2540;
+  --wms-ok: #34c77b;
+  --wms-warn: #f0b429;
+  --wms-bad: #ff6b5f;
+  --wms-code: #0e1116;
+  color-scheme: dark;
+}
+
+@theme inline {
+  --color-canvas: var(--wms-canvas);
+  --color-panel: var(--wms-panel);
+  --color-subtle: var(--wms-subtle);
+  --color-hover: var(--wms-hover);
+  --color-line: var(--wms-line);
+  --color-line-strong: var(--wms-line-strong);
+  --color-fg: var(--wms-fg);
+  --color-muted: var(--wms-muted);
+  --color-faint: var(--wms-faint);
+  --color-accent: var(--wms-accent);
+  --color-accent-fg: var(--wms-accent-fg);
+  --color-accent-soft: var(--wms-accent-soft);
+  --color-ok: var(--wms-ok);
+  --color-warn: var(--wms-warn);
+  --color-bad: var(--wms-bad);
+  --color-code: var(--wms-code);
+  --font-sans: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', 'JetBrains Mono', 'Cascadia Code', Menlo, Consolas, monospace;
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    margin: 0;
+    background: var(--wms-canvas);
+    color: var(--wms-fg);
+    font-family: var(--font-sans);
+    font-size: 13px;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--wms-line-strong) transparent;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--wms-accent);
+    outline-offset: 1px;
+  }
+
+  ::selection {
+    background: var(--wms-accent-soft);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
+
+@keyframes wms-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.wms-enter {
+  animation: wms-fade-in 140ms ease-out;
+}
