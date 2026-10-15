@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Web Mock Studio - Offline API Mock Workbench</title>
+    <meta name="description" content="Zero-backend, offline-first API mock workbench. Intercept fetch and XHR with a Service Worker, infer JSON Schema, generate realistic data, and replay cURL commands, entirely in your browser." />
+    <meta name="theme-color" content="#0b0d11" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#f6f7f9" media="(prefers-color-scheme: light)" />
+    <meta property="og:title" content="Web Mock Studio" />
+    <meta property="og:description" content="Mock any API in your browser. No server, no install, no account." />
+    <meta property="og:type" content="website" />
+    <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <script>
+      (function () {
+        try {
+          var mode = localStorage.getItem('wms:theme') || 'system';
+          var dark = mode === 'dark' || (mode === 'system' && matchMedia('(prefers-color-scheme: dark)').matches);
+          if (dark) document.documentElement.classList.add('dark');
+        } catch (e) {}
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <noscript>Web Mock Studio runs entirely in the browser and requires JavaScript.</noscript>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

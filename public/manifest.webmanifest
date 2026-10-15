@@ -1,0 +1,11 @@
+{
+  "name": "Web Mock Studio",
+  "short_name": "Mock Studio",
+  "description": "Offline-first API mock workbench that runs entirely in the browser.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#0b0d11",
+  "theme_color": "#2f6fed",
+  "icons": [{ "src": "favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
+}
