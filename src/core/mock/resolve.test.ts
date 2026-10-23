@@ -75,6 +75,11 @@ describe('resolveRequest', () => {
     expect(respond(resolveRequest(req('GET', '/api/users/99'), ctx([rule]))).status).toBe(404);
   });
 
+  it('looks up nested dataset items by the last path parameter', () => {
+    const rule = createRule({ pattern: '/api/users/:userId/orders/:id', response: { ...createRule().response, bodyMode: 'dataset', dataset: { templateId: template.id, count: 5, envelope: 'item' } } });
+    expect(JSON.parse(respond(resolveRequest(req('GET', '/api/users/99/orders/3'), ctx([rule]))).body ?? '').id).toBe(3);
+  });
+
   it('reports a misconfigured dataset binding as 500', () => {
     const rule = createRule({ response: { ...createRule().response, bodyMode: 'dataset', dataset: { templateId: 'missing', count: 1, envelope: 'array' } } });
     expect(respond(resolveRequest(req('GET', '/api/resource'), ctx([rule]))).status).toBe(500);

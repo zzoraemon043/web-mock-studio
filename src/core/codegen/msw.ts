@@ -93,7 +93,7 @@ function handlerFor(rule: MockRule, templates: readonly DataTemplate[], datasetV
       lines.push(`const data = ${variable}.slice((page - 1) * pageSize, page * pageSize);`);
       lines.push(`return HttpResponse.json({ data, page, pageSize, total: ${variable}.length, totalPages: Math.ceil(${variable}.length / pageSize) }, ${init});`);
     } else if (rule.response.dataset.envelope === 'item') {
-      lines.push('const key = String(Object.values(params)[0] ?? \'\');');
+      lines.push('const key = String(Object.values(params).at(-1) ?? \'\');');
       lines.push(`const record = ${variable}.find((r) => String(r.id) === key) ?? ${variable}[Number(key) - 1];`);
       lines.push(`if (!record) return HttpResponse.json({ error: 'Not Found' }, { status: 404 });`);
       lines.push(`return HttpResponse.json(record, ${init});`);
@@ -123,7 +123,8 @@ export function generateMswHandlers(rules: readonly MockRule[], templates: reado
     if (!template) continue;
     const key = `${template.id}:${rule.response.dataset.count}`;
     if (datasetVars.has(key)) continue;
-    const name = `${template.name.replace(/[^A-Za-z0-9]+/g, ' ').trim().split(' ').map((w, i) => (i === 0 ? w.toLowerCase() : w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())).join('') || 'dataset'}Records${datasetVars.size || ''}`;
+    const base = template.name.replace(/[^A-Za-z0-9]+/g, ' ').trim().split(' ').map((w, i) => (i === 0 ? w.toLowerCase() : w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())).join('') || 'dataset';
+    const name = `${/^\d/.test(base) ? `_${base}` : base}Records${datasetVars.size || ''}`;
     datasetVars.set(key, name);
     const records = generateRecords(template.schema, rule.response.dataset.count, { seed: `${template.id}:${template.updatedAt}` });
     datasetDecls.push(`const ${name} = ${JSON.stringify(records, null, 2)};`);

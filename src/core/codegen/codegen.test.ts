@@ -16,6 +16,15 @@ describe('generateMswHandlers', () => {
     expect(code).toContain("json?.[\"email\"]");
   });
 
+  it('emits valid identifiers and item lookups for nested routes', () => {
+    const { templates } = createStarterWorkspace();
+    const template = { ...templates[0]!, name: '2024 Orders' };
+    const rule = createRule({ pattern: '/api/users/:userId/orders/:id', response: { ...createRule().response, bodyMode: 'dataset', dataset: { templateId: template.id, count: 3, envelope: 'item' } } });
+    const code = generateMswHandlers([rule], [template]);
+    expect(code).toContain('const _2024OrdersRecords = [');
+    expect(code).toContain('Object.values(params).at(-1)');
+  });
+
   it('escapes template literal metacharacters', () => {
     const rule = createRule({ response: { ...createRule().response, body: '`${x}` {{params.id}}' } });
     expect(generateMswHandlers([rule], [])).toContain('\\`\\${x}\\` ${String(params["id"] ?? \'\')}');

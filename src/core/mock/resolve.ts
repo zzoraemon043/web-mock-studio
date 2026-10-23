@@ -54,7 +54,7 @@ function datasetBody(rule: MockRule, template: DataTemplate, match: RuleMatch, u
   }
 
   if (envelope === 'item') {
-    const key = Object.values(match.params)[0];
+    const key = Object.values(match.params).at(-1);
     if (key === undefined) return { body: records[0] ?? null };
     const byId = records.find((r) => r && typeof r === 'object' && String((r as Record<string, unknown>).id) === key);
     if (byId) return { body: byId };
