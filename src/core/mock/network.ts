@@ -67,6 +67,13 @@ export function statusText(status: number): string {
 
 export const COMMON_STATUSES = Object.keys(STATUS_TEXT).map(Number);
 
+/** Reads a typed status code; anything outside 200..599 is not a status yet. */
+export function parseStatus(text: string): number | null {
+  if (!/^\d{3}$/.test(text.trim())) return null;
+  const status = Number(text);
+  return status >= 200 && status <= 599 ? status : null;
+}
+
 /** Statuses whose responses must not carry a body; the Response constructor throws otherwise. */
 export function isNullBodyStatus(status: number): boolean {
   return status === 101 || status === 103 || status === 204 || status === 205 || status === 304;

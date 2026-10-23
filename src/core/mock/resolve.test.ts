@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { createRule, createTemplate, DEFAULT_NETWORK } from '../defaults.ts';
 import { createRng } from '../random.ts';
 import type { InterceptedRequest, MockDecision, MockRule } from '../types.ts';
-import { computeDelay, pickFailure } from './network.ts';
+import { computeDelay, parseStatus, pickFailure } from './network.ts';
 import { resolveRequest, type ResolveContext } from './resolve.ts';
 
 const req = (method: string, path: string, body: string | null = null, headers: Record<string, string> = {}): InterceptedRequest => ({
@@ -101,6 +101,15 @@ describe('resolveRequest', () => {
 });
 
 describe('network simulation', () => {
+  it('accepts a status only once all three digits are typed', () => {
+    expect(parseStatus('4')).toBeNull();
+    expect(parseStatus('40')).toBeNull();
+    expect(parseStatus('404')).toBe(404);
+    expect(parseStatus('')).toBeNull();
+    expect(parseStatus('199')).toBeNull();
+    expect(parseStatus('600')).toBeNull();
+  });
+
   it('computes latency within jitter bounds', () => {
     const rng = createRng(5);
     expect(computeDelay({ ...DEFAULT_NETWORK, latency: 'none', jitterMs: 500 }, rng)).toBe(0);

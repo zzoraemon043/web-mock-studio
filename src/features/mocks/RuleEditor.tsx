@@ -1,8 +1,8 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { ArrowUpRight, Copy, Plus, Trash2, Wand2, X } from 'lucide-react';
 import { HTTP_METHODS, type FailureOutcome, type LatencyProfile, type MockRule, type QueryMatchMode, type RuleMethod } from '../../core/types.ts';
 import { describePattern } from '../../core/router/match.ts';
-import { COMMON_STATUSES, FAILURE_OUTCOMES, LATENCY_PROFILES, MAX_DELAY_MS, statusText } from '../../core/mock/network.ts';
+import { COMMON_STATUSES, FAILURE_OUTCOMES, LATENCY_PROFILES, MAX_DELAY_MS, parseStatus, statusText } from '../../core/mock/network.ts';
 import { TEMPLATE_TOKENS } from '../../core/mock/template.ts';
 import { useWorkspace } from '../../store/workspace.ts';
 import { useUi } from '../../store/ui.ts';
@@ -32,6 +32,28 @@ const ENVELOPE_HINTS = {
   paginated: 'Returns { data, page, pageSize, total, totalPages } and honors ?page= with ?pageSize=, ?per_page= or ?limit=.',
   item: 'Returns the record whose id equals the first path parameter, falling back to its 1-based position; 404 when not found.',
 } as const;
+
+function StatusInput({ status, onChange }: { status: number; onChange: (status: number) => void }) {
+  const [draft, setDraft] = useState(String(status));
+  return (
+    <Input
+      mono
+      type="number"
+      min={200}
+      max={599}
+      value={draft}
+      onChange={(e) => {
+        setDraft(e.target.value);
+        const parsed = parseStatus(e.target.value);
+        if (parsed !== null) onChange(parsed);
+      }}
+      onBlur={() => setDraft(String(status))}
+      aria-label="Status code"
+      className="w-20"
+      list="wms-statuses"
+    />
+  );
+}
 
 export function RuleEditor({ rule }: { rule: MockRule }) {
   const updateRule = useWorkspace((s) => s.updateRule);
@@ -196,17 +218,7 @@ export function RuleEditor({ rule }: { rule: MockRule }) {
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-[200px_1fr]">
             <Field label="Status">
               <div className="flex gap-1.5">
-                <Input
-                  mono
-                  type="number"
-                  min={200}
-                  max={599}
-                  value={rule.response.status}
-                  onChange={(e) => patchResponse({ status: Math.min(599, Math.max(200, Number(e.target.value) || 200)) })}
-                  aria-label="Status code"
-                  className="w-20"
-                  list="wms-statuses"
-                />
+                <StatusInput key={rule.id} status={rule.response.status} onChange={(status) => patchResponse({ status })} />
                 <span className="flex items-center truncate text-xs text-muted">{statusText(rule.response.status)}</span>
                 <datalist id="wms-statuses">
                   {COMMON_STATUSES.filter((s) => s >= 200).map((s) => (
