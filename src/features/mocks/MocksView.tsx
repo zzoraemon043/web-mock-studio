@@ -21,8 +21,8 @@ export function MocksView() {
   }, [rule, rules, selectRule]);
 
   return (
-    <div className="flex h-full min-h-0">
-      <aside className="w-72 shrink-0 border-r border-line bg-panel xl:w-80">
+    <div className="flex h-full min-h-0 flex-col md:flex-row">
+      <aside className="max-h-48 w-full shrink-0 overflow-auto border-b border-line bg-panel md:max-h-none md:w-72 md:border-b-0 md:border-r xl:w-80">
         <RuleList />
       </aside>
       <div className="flex min-w-0 flex-1 flex-col">
