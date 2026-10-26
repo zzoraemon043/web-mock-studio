@@ -37,16 +37,21 @@ export function createRng(seed: string | number = Date.now()): Rng {
   const int = (min: number, max: number): number => {
     const lo = Math.ceil(Math.min(min, max));
     const hi = Math.floor(Math.max(min, max));
-    return lo + Math.floor(next() * (hi - lo + 1));
+    const span = hi - lo + 1;
+    if (Number.isFinite(span)) return lo + Math.floor(next() * span);
+    const t = next();
+    return Math.min(hi, Math.max(lo, Math.floor(lo * (1 - t) + hi * t)));
   };
 
   return {
     next,
     int,
     float(min, max, decimals = 2) {
-      const value = min + next() * (max - min);
+      const t = next();
+      const value = min * (1 - t) + max * t;
       const factor = 10 ** decimals;
-      return Math.round(value * factor) / factor;
+      const rounded = Math.round(value * factor) / factor;
+      return Number.isFinite(rounded) ? rounded : value;
     },
     bool(probability = 0.5) {
       return next() < probability;

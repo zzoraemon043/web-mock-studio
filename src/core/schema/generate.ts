@@ -90,7 +90,7 @@ function generateNode(schema: JsonSchema, ctx: FakerContext, state: State, depth
       const out: Record<string, unknown> = {};
       for (const [key, prop] of Object.entries(schema.properties ?? {})) {
         if (!required.has(key) && !state.rng.bool(state.optionalRate)) continue;
-        out[key] = generateNode(prop, ctx, state, depth + 1);
+        Object.defineProperty(out, key, { value: generateNode(prop, ctx, state, depth + 1), enumerable: true, writable: true, configurable: true });
       }
       return out;
     }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { generateRecords, generateValue } from './generate.ts';
-import { inferSchema, SCHEMA_DIALECT } from './infer.ts';
+import { inferSchema, parseJson, SCHEMA_DIALECT } from './infer.ts';
 import { listFields, pathToString, updateField } from './fields.ts';
 import type { JsonSchema } from './types.ts';
 
@@ -66,6 +66,40 @@ describe('inferSchema', () => {
     expect(inferSchema(null).type).toBe('null');
     expect(inferSchema([])).toMatchObject({ type: 'array', minItems: 0, maxItems: 0 });
     expect(inferSchema({ a: { b: { c: 1 } } }).properties?.a?.properties?.b?.properties?.c?.type).toBe('integer');
+  });
+});
+
+describe('edge cases', () => {
+  it('keeps a __proto__ key as an ordinary property', () => {
+    const parsed = parseJson('{"__proto__":{"x":1},"name":"Ada"}');
+    const schema = inferSchema(parsed.value);
+    expect(Object.keys(schema.properties ?? {})).toEqual(['__proto__', 'name']);
+    expect(schema.required).toEqual(['__proto__', 'name']);
+    const [record] = generateRecords(schema, 1, { seed: 1 }) as Record<string, unknown>[];
+    expect(Object.keys(record ?? {})).toEqual(['__proto__', 'name']);
+    expect(Object.getPrototypeOf(record)).toBe(Object.prototype);
+    expect(Object.keys(Object.getOwnPropertyDescriptor(record, '__proto__')?.value as object)).toEqual(['x']);
+  });
+
+  it('rejects samples nested too deeply instead of overflowing the stack', () => {
+    const parsed = parseJson('['.repeat(3000) + ']'.repeat(3000));
+    expect(parsed.ok).toBe(false);
+    expect(parsed.error).toMatch(/nested deeper than 256 levels/);
+    expect(parseJson('['.repeat(200) + ']'.repeat(200)).ok).toBe(true);
+  });
+
+  it('keeps numeric bounds and generated values finite near the float limit', () => {
+    for (const sample of [{ f: 1e308 }, { f: -1e308 }, { f: 1.5e308 }]) {
+      const schema = inferSchema(sample);
+      const field = schema.properties?.f;
+      expect(Number.isFinite(field?.minimum)).toBe(true);
+      expect(Number.isFinite(field?.maximum)).toBe(true);
+      const records = generateRecords(schema, 20, { seed: 3 }) as { f: unknown }[];
+      for (const record of records) expect(Number.isFinite(record.f)).toBe(true);
+    }
+    const wide = inferSchema([{ f: -1.7e308 }, { f: 1.7e308 }, { f: 0.5 }]);
+    const records = generateRecords(wide, 20, { seed: 4 }) as { f: unknown }[];
+    for (const record of records) expect(Number.isFinite(record.f)).toBe(true);
   });
 });
 

@@ -5,6 +5,7 @@ import type { JsonSchema, JsonSchemaType } from './types.ts';
 export const SCHEMA_DIALECT = 'https://json-schema.org/draft/2020-12/schema';
 
 const SAMPLE_CAP = 1000;
+const MAX_JSON_DEPTH = 256;
 
 /**
  * Inference runs in two passes. `observe` folds every sample into a Shape that keeps
@@ -126,8 +127,8 @@ function numberSchema(numbers: number[], allIntegers: boolean, key: string | und
   if (min === max) {
     // A single observation says little about range; widen symmetrically around zero-anchored bounds.
     const magnitude = Math.abs(min) || 10;
-    min = min >= 0 ? 0 : min * 2;
-    max = max >= 0 ? Math.max(max * 2, magnitude) : 0;
+    min = min >= 0 ? 0 : finiteOr(min * 2, min);
+    max = max >= 0 ? finiteOr(Math.max(max * 2, magnitude), max) : 0;
   }
   if (kind === 'percentage') {
     min = Math.max(0, min);
@@ -136,6 +137,10 @@ function numberSchema(numbers: number[], allIntegers: boolean, key: string | und
   schema.minimum = allIntegers ? Math.floor(min) : min;
   schema.maximum = allIntegers ? Math.ceil(max) : max;
   return schema;
+}
+
+function finiteOr(value: number, fallback: number): number {
+  return Number.isFinite(value) ? value : fallback;
 }
 
 function arraySchema(arrays: NonNullable<Shape['arrays']>, key: string | undefined): JsonSchema {
@@ -161,7 +166,7 @@ function objectSchema(objects: NonNullable<Shape['objects']>): JsonSchema {
   const properties: Record<string, JsonSchema> = {};
   const required: string[] = [];
   for (const [key, prop] of objects.props) {
-    properties[key] = toSchema(prop, key);
+    Object.defineProperty(properties, key, { value: toSchema(prop, key), enumerable: true, writable: true, configurable: true });
     if ((objects.presence.get(key) ?? 0) === objects.count) required.push(key);
   }
   return { type: 'object', properties, required };
@@ -204,9 +209,24 @@ export interface ParseResult<T> {
   error?: string;
 }
 
+function nestingDepth(value: unknown): number {
+  let deepest = 0;
+  const stack: [unknown, number][] = [[value, 1]];
+  while (stack.length > 0) {
+    const [node, depth] = stack.pop() as [unknown, number];
+    if (node === null || typeof node !== 'object') continue;
+    deepest = Math.max(deepest, depth);
+    if (deepest > MAX_JSON_DEPTH) break;
+    for (const child of Object.values(node)) stack.push([child, depth + 1]);
+  }
+  return deepest;
+}
+
 export function parseJson(text: string): ParseResult<unknown> {
   try {
-    return { ok: true, value: JSON.parse(text) };
+    const value: unknown = JSON.parse(text);
+    if (nestingDepth(value) > MAX_JSON_DEPTH) return { ok: false, error: `JSON is nested deeper than ${MAX_JSON_DEPTH} levels` };
+    return { ok: true, value };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : String(err) };
   }
