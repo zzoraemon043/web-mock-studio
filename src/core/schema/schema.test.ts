@@ -117,6 +117,21 @@ describe('edge cases', () => {
   });
 });
 
+describe('generate numeric bounds', () => {
+  it('keeps values within a negative maximum when no minimum is given', () => {
+    const schema: JsonSchema = {
+      type: 'object',
+      required: ['n', 'f'],
+      properties: { n: { type: 'integer', maximum: -5 }, f: { type: 'number', maximum: -0.5 } },
+    };
+    const records = generateRecords(schema, 200, { seed: 7 }) as { n: number; f: number }[];
+    for (const r of records) {
+      expect(r.n).toBeLessThanOrEqual(-5);
+      expect(r.f).toBeLessThanOrEqual(-0.5);
+    }
+  });
+});
+
 describe('generate', () => {
   const schema = inferSchema(users);
 

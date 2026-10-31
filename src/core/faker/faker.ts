@@ -101,7 +101,7 @@ function avatar(persona: Persona, rng: Rng): string {
 }
 
 function range(ctx: FakerContext, fallbackMin: number, fallbackMax: number): [number, number] {
-  const min = ctx.min ?? fallbackMin;
+  const min = ctx.min ?? (ctx.max !== undefined && ctx.max < fallbackMin ? ctx.max - (fallbackMax - fallbackMin) : fallbackMin);
   const max = ctx.max ?? Math.max(min, fallbackMax);
   return [min, max];
 }
