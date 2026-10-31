@@ -132,6 +132,50 @@ describe('generate numeric bounds', () => {
   });
 });
 
+describe('generate numeric constraints', () => {
+  const many = (schema: JsonSchema): number[] => generateRecords({ type: 'array', items: schema }, 100, { seed: 3 }) as number[];
+
+  it('honors exclusiveMinimum and exclusiveMaximum in both draft forms', () => {
+    expect(new Set(many({ type: 'integer', exclusiveMinimum: 5, exclusiveMaximum: 7 }))).toEqual(new Set([6]));
+    for (const v of many({ type: 'integer', minimum: 5, maximum: 8, exclusiveMinimum: true, exclusiveMaximum: true })) {
+      expect(v === 6 || v === 7).toBe(true);
+    }
+    for (const v of many({ type: 'number', exclusiveMinimum: 0, exclusiveMaximum: 1 })) {
+      expect(v).toBeGreaterThan(0);
+      expect(v).toBeLessThan(1);
+    }
+  });
+
+  it('snaps values to multipleOf within the range', () => {
+    for (const v of many({ type: 'number', multipleOf: 5, minimum: 3, maximum: 98 })) {
+      expect(v % 5).toBe(0);
+      expect(v).toBeGreaterThanOrEqual(3);
+      expect(v).toBeLessThanOrEqual(98);
+    }
+    for (const v of many({ type: 'number', multipleOf: 0.1, minimum: 0, maximum: 2 })) expect(Math.round(v * 10) / 10).toBe(v);
+  });
+
+  it('keeps integers inside fractional bounds', () => {
+    for (const v of many({ type: 'integer', minimum: 1.2, maximum: 3.7 })) {
+      expect(v).toBeGreaterThanOrEqual(2);
+      expect(v).toBeLessThanOrEqual(3);
+    }
+  });
+
+  it('applies the range to percentage, latitude, longitude and one-sided timestamps', () => {
+    for (const v of many({ type: 'integer', 'x-faker': 'percentage', minimum: 10, maximum: 20 })) {
+      expect(v).toBeGreaterThanOrEqual(10);
+      expect(v).toBeLessThanOrEqual(20);
+    }
+    for (const v of many({ type: 'number', 'x-faker': 'latitude', minimum: 10, maximum: 20 })) {
+      expect(v).toBeGreaterThanOrEqual(10);
+      expect(v).toBeLessThanOrEqual(20);
+    }
+    for (const v of many({ type: 'number', 'x-faker': 'longitude', maximum: -170 })) expect(v).toBeLessThanOrEqual(-170);
+    for (const v of many({ type: 'integer', 'x-faker': 'unixSeconds', minimum: 1_700_000_000 })) expect(v).toBeGreaterThanOrEqual(1_700_000_000);
+  });
+});
+
 describe('generate', () => {
   const schema = inferSchema(users);
 

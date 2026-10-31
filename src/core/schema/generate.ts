@@ -66,6 +66,49 @@ function fakeWithRange(kind: FakerKind, ctx: FakerContext, schema: JsonSchema): 
   return fake(kind, { ...ctx, min: schema.minimum, max: schema.maximum });
 }
 
+const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
+
+interface Bounds {
+  min?: number;
+  max?: number;
+}
+
+/** Folds minimum/exclusiveMinimum (draft 4 boolean or draft 6+ number form) into inclusive bounds. */
+function numericBounds(schema: JsonSchema, integer: boolean): Bounds {
+  const step = integer ? 1 : 0.01;
+  let min = isNum(schema.minimum) ? schema.minimum : undefined;
+  let max = isNum(schema.maximum) ? schema.maximum : undefined;
+  if (isNum(schema.exclusiveMinimum)) min = min === undefined ? schema.exclusiveMinimum + step : Math.max(min, schema.exclusiveMinimum + step);
+  else if (schema.exclusiveMinimum === true && min !== undefined) min += step;
+  if (isNum(schema.exclusiveMaximum)) max = max === undefined ? schema.exclusiveMaximum - step : Math.min(max, schema.exclusiveMaximum - step);
+  else if (schema.exclusiveMaximum === true && max !== undefined) max -= step;
+  if (integer) {
+    if (min !== undefined) min = Math.ceil(min);
+    if (max !== undefined) max = Math.floor(max);
+  }
+  return { min, max };
+}
+
+function snapToMultiple(value: number, multipleOf: number, { min, max }: Bounds): number {
+  let out = Math.round(value / multipleOf) * multipleOf;
+  if (min !== undefined && out < min) out += Math.ceil((min - out) / multipleOf - 1e-9) * multipleOf;
+  if (max !== undefined && out > max) out -= Math.ceil((out - max) / multipleOf - 1e-9) * multipleOf;
+  const decimals = Math.min(10, (String(multipleOf).split('.')[1] ?? '').length);
+  return Number(out.toFixed(decimals));
+}
+
+function generateNumber(kind: FakerKind | undefined, ctx: FakerContext, schema: JsonSchema, integer: boolean): number {
+  const { min, max } = numericBounds(schema, integer);
+  const call = (k: FakerKind): unknown => fake(k, { ...ctx, min, max });
+  const raw = kind ? call(kind) : undefined;
+  let value = isNum(raw) ? raw : (call(integer ? 'integer' : 'float') as number);
+  if (integer) value = Math.round(value);
+  if (isNum(schema.multipleOf) && schema.multipleOf > 0) value = snapToMultiple(value, schema.multipleOf, { min, max });
+  if (min !== undefined && value < min) value = min;
+  if (max !== undefined && value > max) value = max;
+  return value;
+}
+
 function generateNode(input: JsonSchema, ctx: FakerContext, state: State, depth: number): unknown {
   const schema = asObject(input);
   state.budget -= 1;
@@ -82,11 +125,8 @@ function generateNode(input: JsonSchema, ctx: FakerContext, state: State, depth:
     case 'boolean':
       return state.rng.bool();
     case 'integer':
-    case 'number': {
-      const value = kind ? fakeWithRange(kind, ctx, schema) : undefined;
-      if (typeof value === 'number') return type === 'integer' ? Math.round(value) : value;
-      return fakeWithRange(type === 'integer' ? 'integer' : 'float', ctx, schema);
-    }
+    case 'number':
+      return generateNumber(kind, ctx, schema, type === 'integer');
     case 'string': {
       const resolved = kind ?? (schema.format ? FORMAT_KINDS[schema.format] : undefined) ?? 'word';
       return clampString(String(fakeWithRange(resolved, ctx, schema)), schema);

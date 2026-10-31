@@ -108,9 +108,12 @@ function range(ctx: FakerContext, fallbackMin: number, fallbackMax: number): [nu
 
 function timestampMs(ctx: FakerContext): number {
   const base = ctx.baseTime ?? DEFAULT_BASE_TIME;
-  if (ctx.min !== undefined && ctx.max !== undefined && ctx.max > ctx.min) {
-    return Math.floor(ctx.min + ctx.rng.next() * (ctx.max - ctx.min));
+  const { min, max } = ctx;
+  if (min !== undefined && max !== undefined) {
+    return max > min ? Math.floor(min + ctx.rng.next() * (max - min)) : min;
   }
+  if (min !== undefined) return Math.floor(min + ctx.rng.next() * 365 * DAY_MS);
+  if (max !== undefined) return Math.floor(max - ctx.rng.next() * 365 * DAY_MS);
   return base - ctx.rng.int(0, 365) * DAY_MS - ctx.rng.int(0, DAY_MS - 1);
 }
 
@@ -157,10 +160,14 @@ export function fake(kind: FakerKind, ctx: FakerContext): unknown {
       return ctx.persona().city[2];
     case 'zipCode':
       return String(rng.int(10000, 99999));
-    case 'latitude':
-      return rng.float(-90, 90, 6);
-    case 'longitude':
-      return rng.float(-180, 180, 6);
+    case 'latitude': {
+      const [min, max] = range(ctx, -90, 90);
+      return rng.float(min, max, 6);
+    }
+    case 'longitude': {
+      const [min, max] = range(ctx, -180, 180);
+      return rng.float(min, max, 6);
+    }
     case 'url':
       return `https://www.${ctx.persona().domain}/${slugify(words(rng, 2).join(' '))}`;
     case 'domain':
@@ -186,7 +193,7 @@ export function fake(kind: FakerKind, ctx: FakerContext): unknown {
     case 'date':
       return new Date(timestampMs(ctx)).toISOString().slice(0, 10);
     case 'unixSeconds':
-      return Math.floor(timestampMs({ ...ctx, min: ctx.min && ctx.min * 1000, max: ctx.max && ctx.max * 1000 }) / 1000);
+      return Math.floor(timestampMs({ ...ctx, min: ctx.min === undefined ? undefined : ctx.min * 1000, max: ctx.max === undefined ? undefined : ctx.max * 1000 }) / 1000);
     case 'unixMillis':
       return timestampMs(ctx);
     case 'word':
@@ -205,8 +212,10 @@ export function fake(kind: FakerKind, ctx: FakerContext): unknown {
       const [min, max] = range(ctx, 0, 1000);
       return rng.float(min, max, 2);
     }
-    case 'percentage':
-      return rng.int(0, 100);
+    case 'percentage': {
+      const [min, max] = range(ctx, 0, 100);
+      return rng.int(min, max);
+    }
     case 'boolean':
       return rng.bool();
   }
