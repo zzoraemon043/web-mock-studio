@@ -17,7 +17,16 @@ interface State {
   optionalRate: number;
   nullRate: number;
   maxDepth: number;
+  /** Remaining node budget; once spent, arrays collapse to empty so nested minItems cannot blow up. */
+  budget: number;
 }
+
+const MAX_ITEMS = 1000;
+const MAX_STRING = 10_000;
+const NODE_BUDGET = 20_000;
+const TOTAL_BUDGET = 5_000_000;
+
+const asObject = (v: unknown): JsonSchema => (typeof v === 'object' && v !== null && !Array.isArray(v) ? (v as JsonSchema) : {});
 
 const FORMAT_KINDS: Record<string, FakerKind> = {
   uuid: 'uuid',
@@ -45,8 +54,11 @@ function resolveType(schema: JsonSchema, state: State): JsonSchemaType | undefin
 
 function clampString(value: string, schema: JsonSchema): string {
   let out = value;
-  if (schema.maxLength !== undefined && out.length > schema.maxLength) out = out.slice(0, schema.maxLength);
-  if (schema.minLength !== undefined) while (out.length < schema.minLength) out += 'x';
+  if (typeof schema.maxLength === 'number' && out.length > schema.maxLength) out = out.slice(0, Math.max(0, schema.maxLength));
+  if (typeof schema.minLength === 'number') {
+    const target = Math.min(schema.minLength, MAX_STRING);
+    if (out.length < target) out += 'x'.repeat(target - out.length);
+  }
   return out;
 }
 
@@ -54,9 +66,11 @@ function fakeWithRange(kind: FakerKind, ctx: FakerContext, schema: JsonSchema): 
   return fake(kind, { ...ctx, min: schema.minimum, max: schema.maximum });
 }
 
-function generateNode(schema: JsonSchema, ctx: FakerContext, state: State, depth: number): unknown {
+function generateNode(input: JsonSchema, ctx: FakerContext, state: State, depth: number): unknown {
+  const schema = asObject(input);
+  state.budget -= 1;
   if (schema.const !== undefined) return schema.const;
-  if (schema.enum && schema.enum.length > 0) return state.rng.pick(schema.enum);
+  if (Array.isArray(schema.enum) && schema.enum.length > 0) return state.rng.pick(schema.enum);
 
   const type = resolveType(schema, state);
   const kind = schema['x-faker'];
@@ -78,17 +92,20 @@ function generateNode(schema: JsonSchema, ctx: FakerContext, state: State, depth
       return clampString(String(fakeWithRange(resolved, ctx, schema)), schema);
     }
     case 'array': {
-      if (depth >= state.maxDepth || !schema.items) return [];
-      const min = schema.minItems ?? 1;
-      const max = Math.max(min, schema.maxItems ?? Math.max(min, 5));
+      if (depth >= state.maxDepth || !schema.items || state.budget <= 0) return [];
+      const clamp = (n: unknown, fallback: number): number => (typeof n === 'number' && Number.isFinite(n) ? Math.min(MAX_ITEMS, Math.max(0, n)) : fallback);
+      const min = clamp(schema.minItems, 1);
+      const max = Math.max(min, clamp(schema.maxItems, Math.max(min, 5)));
       const length = state.rng.int(min, max);
-      return Array.from({ length }, (_, i) => generateNode(schema.items as JsonSchema, childContext(ctx, i, schema.items), state, depth + 1));
+      const out: unknown[] = [];
+      for (let i = 0; i < length && state.budget > 0; i++) out.push(generateNode(schema.items, childContext(ctx, i, schema.items), state, depth + 1));
+      return out;
     }
     case 'object': {
       if (depth >= state.maxDepth) return {};
-      const required = new Set(schema.required ?? []);
+      const required = new Set(Array.isArray(schema.required) ? schema.required : []);
       const out: Record<string, unknown> = {};
-      for (const [key, prop] of Object.entries(schema.properties ?? {})) {
+      for (const [key, prop] of Object.entries(asObject(schema.properties))) {
         if (!required.has(key) && !state.rng.bool(state.optionalRate)) continue;
         Object.defineProperty(out, key, { value: generateNode(prop, ctx, state, depth + 1), enumerable: true, writable: true, configurable: true });
       }
@@ -113,6 +130,7 @@ function createState(options: GenerateOptions): State {
     optionalRate: options.optionalRate ?? 0.8,
     nullRate: options.nullRate ?? 0.1,
     maxDepth: options.maxDepth ?? 12,
+    budget: NODE_BUDGET,
   };
 }
 
@@ -129,7 +147,14 @@ export function generateRecords(schema: JsonSchema, count: number, options: Gene
   const state = createState(options);
   const itemSchema = recordSchema(schema);
   const safeCount = Math.max(0, Math.min(Math.floor(count), 10_000));
-  return Array.from({ length: safeCount }, (_, i) => generateNode(itemSchema, createContext(state.rng, i), state, 0));
+  let total = TOTAL_BUDGET;
+  return Array.from({ length: safeCount }, (_, i) => {
+    state.budget = Math.min(NODE_BUDGET, total);
+    const start = state.budget;
+    const record = generateNode(itemSchema, createContext(state.rng, i), state, 0);
+    total -= start - state.budget;
+    return record;
+  });
 }
 
 export function recordSchema(schema: JsonSchema): JsonSchema {

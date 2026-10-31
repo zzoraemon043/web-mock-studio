@@ -182,3 +182,29 @@ describe('schema fields', () => {
     expect(schema.items?.properties?.profile?.properties?.city?.['x-faker']).toBe('city');
   });
 });
+
+describe('generate hostile schemas', () => {
+  it('clamps huge minItems and minLength', () => {
+    const arr = generateValue({ type: 'array', items: { type: 'integer' }, minItems: 1e9 }, { seed: 1 }) as unknown[];
+    expect(arr.length).toBeLessThanOrEqual(1000);
+    expect((generateValue({ type: 'string', minLength: 3e7 }, { seed: 1 }) as string).length).toBeLessThanOrEqual(10_000);
+  });
+
+  it('bounds nested arrays with a node budget', () => {
+    const leaf = { type: 'array', minItems: 100, items: { type: 'integer' } } as const;
+    const schema = { type: 'array', minItems: 100, items: { type: 'array', minItems: 100, items: { type: 'array', minItems: 100, items: leaf } } } as const;
+    const start = Date.now();
+    generateValue(schema as never, { seed: 1 });
+    expect(Date.now() - start).toBeLessThan(2000);
+  });
+
+  it('tolerates malformed required and properties', () => {
+    expect(() => generateValue({ type: 'object', properties: { a: { type: 'string' } }, required: 5 as never }, { seed: 1 })).not.toThrow();
+    expect(() => generateValue({ type: 'object', properties: { a: null as never } }, { seed: 1 })).not.toThrow();
+  });
+
+  it('keeps records intact across many rows', () => {
+    const records = generateRecords({ type: 'object', properties: { tags: { type: 'array', items: { type: 'string' }, minItems: 3 } }, required: ['tags'] }, 10_000, { seed: 1 }) as { tags: string[] }[];
+    expect(records.every((r) => r.tags.length >= 3)).toBe(true);
+  });
+});
