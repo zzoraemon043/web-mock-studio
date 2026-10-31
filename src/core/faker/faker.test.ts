@@ -39,6 +39,23 @@ describe('fake', () => {
     }
   });
 
+  it('varies values when only a large minimum is given', () => {
+    const rng = createRng(6);
+    const seen = new Set<unknown>();
+    for (let i = 0; i < 50; i++) {
+      const n = fake('integer', { ...createContext(rng), min: 5000 }) as number;
+      expect(n).toBeGreaterThanOrEqual(5000);
+      seen.add(n);
+    }
+    expect(seen.size).toBeGreaterThan(1);
+  });
+
+  it('keeps out-of-range timestamps valid', () => {
+    const rng = createRng(7);
+    expect(() => fake('isoDateTime', { ...createContext(rng), min: 1e20 })).not.toThrow();
+    expect(() => fake('date', { ...createContext(rng), max: -1e20 })).not.toThrow();
+  });
+
   it('builds an offline SVG avatar data URI', () => {
     expect(fake('avatar', createContext(createRng(5)))).toMatch(/^data:image\/svg\+xml,/);
   });
@@ -72,6 +89,7 @@ describe('semantic detection', () => {
     ['_id', '507f1f77bcf86cd799439011', 'objectId'],
     ['website', 'https://x.dev', 'url'],
     ['contact', 'ops@x.dev', 'email'],
+    ['profile', 'https://medium.com/@ada.l/post.html', 'url'],
     ['description', 'short', 'sentence'],
     ['longDescription', 'short', 'sentence'],
     ['enabled', true, 'boolean'],

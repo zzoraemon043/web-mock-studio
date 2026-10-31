@@ -102,11 +102,17 @@ function avatar(persona: Persona, rng: Rng): string {
 
 function range(ctx: FakerContext, fallbackMin: number, fallbackMax: number): [number, number] {
   const min = ctx.min ?? (ctx.max !== undefined && ctx.max < fallbackMin ? ctx.max - (fallbackMax - fallbackMin) : fallbackMin);
-  const max = ctx.max ?? Math.max(min, fallbackMax);
+  const max = ctx.max ?? (min >= fallbackMax ? min + (fallbackMax - fallbackMin) : fallbackMax);
   return [min, max];
 }
 
+const MAX_DATE_MS = 8.64e15;
+
 function timestampMs(ctx: FakerContext): number {
+  return Math.min(MAX_DATE_MS, Math.max(-MAX_DATE_MS, rawTimestampMs(ctx)));
+}
+
+function rawTimestampMs(ctx: FakerContext): number {
   const base = ctx.baseTime ?? DEFAULT_BASE_TIME;
   const { min, max } = ctx;
   if (min !== undefined && max !== undefined) {

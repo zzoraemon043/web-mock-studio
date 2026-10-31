@@ -13,10 +13,10 @@ export type ValueFormat = 'uuid' | 'email' | 'date-time' | 'date' | 'uri' | 'ipv
 
 export function detectStringFormat(value: string): ValueFormat | undefined {
   if (UUID_RE.test(value)) return 'uuid';
+  if (URL_RE.test(value)) return 'uri';
   if (EMAIL_RE.test(value)) return 'email';
   if (ISO_DATETIME_RE.test(value)) return 'date-time';
   if (DATE_RE.test(value)) return 'date';
-  if (URL_RE.test(value)) return 'uri';
   if (IPV4_RE.test(value)) return 'ipv4';
   if (HEX_COLOR_RE.test(value)) return 'color';
   return undefined;
