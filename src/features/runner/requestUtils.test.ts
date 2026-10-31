@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { diagnoseFailure, patternFromUrl, tryPrettyJson } from './requestUtils.ts';
+import { diagnoseFailure, invalidHeaderReason, patternFromUrl, tryPrettyJson } from './requestUtils.ts';
 
 describe('patternFromUrl', () => {
   it('strips the origin for same-origin URLs and keeps it otherwise', () => {
@@ -25,5 +25,20 @@ describe('tryPrettyJson', () => {
   it('formats JSON and leaves other text untouched', () => {
     expect(tryPrettyJson('{"a":1}')).toEqual({ pretty: '{\n  "a": 1\n}', isJson: true });
     expect(tryPrettyJson('<html>')).toEqual({ pretty: '<html>', isJson: false });
+  });
+});
+
+describe('invalidHeaderReason', () => {
+  it('accepts ordinary headers', () => {
+    expect(invalidHeaderReason([['Content-Type', 'application/json'], ['X-Api-Key', 'abc 123']])).toBeNull();
+  });
+  it('flags illegal names', () => {
+    expect(invalidHeaderReason([['Bad Name', 'x']])).toMatch(/Bad Name/);
+    expect(invalidHeaderReason([['X:Y', 'x']])).toMatch(/not allowed/);
+  });
+  it('flags values outside Latin-1 or with control characters', () => {
+    expect(invalidHeaderReason([['X-Name', '小羊']])).toMatch(/X-Name/);
+    expect(invalidHeaderReason([['X-Name', 'a\nb']])).toMatch(/X-Name/);
+    expect(invalidHeaderReason([['X-Name', 'café']])).toBeNull();
   });
 });

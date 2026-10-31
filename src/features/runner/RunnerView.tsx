@@ -12,7 +12,7 @@ import { KeyValueEditor } from '../../components/KeyValueEditor.tsx';
 import { copyText, cx, formatBytes, formatJson, modKey } from '../../lib/utils.ts';
 import { createAndSelectRule } from '../../app/actions.ts';
 import { CurlImportModal } from './CurlImportModal.tsx';
-import { diagnoseFailure, patternFromUrl, tryPrettyJson } from './requestUtils.ts';
+import { diagnoseFailure, invalidHeaderReason, patternFromUrl, tryPrettyJson } from './requestUtils.ts';
 
 interface RunResult {
   status: number;
@@ -28,6 +28,7 @@ interface RunResult {
 interface RunFailure {
   message: string;
   url: string;
+  badRequest?: boolean;
 }
 
 const BODYLESS = new Set(['GET', 'HEAD']);
@@ -86,11 +87,14 @@ export function RunnerView() {
     setFailure(null);
     const started = performance.now();
     try {
-      const init: RequestInit = {
-        method,
-        headers: headers.filter((h) => h.enabled && h.key.trim()).map((h) => [h.key.trim(), h.value]),
-        signal: controller.signal,
-      };
+      const sentHeaders = headers.filter((h) => h.enabled && h.key.trim()).map((h): [string, string] => [h.key.trim(), h.value]);
+      const badHeader = invalidHeaderReason(sentHeaders);
+      if (badHeader) {
+        setResult(null);
+        setFailure({ message: badHeader, url: absoluteUrl, badRequest: true });
+        return;
+      }
+      const init: RequestInit = { method, headers: sentHeaders, signal: controller.signal };
       if (!BODYLESS.has(method) && body) init.body = body;
       const response = await fetch(url, init);
       const text = method === 'HEAD' ? '' : await response.text();
@@ -152,7 +156,11 @@ export function RunnerView() {
     toast('Request saved', 'success');
   };
 
-  const diagnosis = failure ? diagnoseFailure(failure.url, location.origin, location.protocol) : null;
+  const diagnosis = failure
+    ? failure.badRequest
+      ? { title: 'The request was not sent', causes: ['Fix the header in the Headers tab and send again.'] }
+      : diagnoseFailure(failure.url, location.origin, location.protocol)
+    : null;
   const pretty = result ? tryPrettyJson(result.body) : null;
 
   return (

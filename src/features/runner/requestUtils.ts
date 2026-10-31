@@ -48,3 +48,14 @@ export function tryPrettyJson(text: string): { pretty: string; isJson: boolean }
     return { pretty: text, isJson: false };
   }
 }
+
+const HEADER_NAME = /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/;
+
+/** fetch() throws a bare TypeError for illegal header names or values; name the offender instead of blaming the network. */
+export function invalidHeaderReason(headers: ReadonlyArray<readonly [string, string]>): string | null {
+  for (const [name, value] of headers) {
+    if (!HEADER_NAME.test(name)) return `Header name "${name}" contains characters that are not allowed.`;
+    if (/[^\t\x20-\x7e\x80-\xff]/.test(value)) return `The value of header "${name}" contains characters browsers cannot send (only Latin-1 is allowed).`;
+  }
+  return null;
+}
