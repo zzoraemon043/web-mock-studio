@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { createRule, createTemplate, DEFAULT_NETWORK } from '../defaults.ts';
 import { createRng } from '../random.ts';
 import type { InterceptedRequest, MockDecision, MockRule } from '../types.ts';
-import { computeDelay, parseStatus, pickFailure, toResponseHeaders } from './network.ts';
+import { abortableDelay, computeDelay, parseStatus, pickFailure, toResponseHeaders } from './network.ts';
 import { resolveRequest, type ResolveContext } from './resolve.ts';
 import { interpolate } from './template.ts';
 
@@ -158,5 +158,24 @@ describe('toResponseHeaders', () => {
 
   it('keeps the original case on request', () => {
     expect(toResponseHeaders([row('X-Id', '1')], false)).toEqual({ 'X-Id': '1' });
+  });
+});
+
+describe('abortableDelay', () => {
+  it('resolves after the delay when not aborted', async () => {
+    await expect(abortableDelay(5, new AbortController().signal)).resolves.toBeUndefined();
+  });
+
+  it('rejects immediately when the signal is already aborted', async () => {
+    const controller = new AbortController();
+    controller.abort();
+    await expect(abortableDelay(60_000, controller.signal)).rejects.toMatchObject({ name: 'AbortError' });
+  });
+
+  it('rejects as soon as the signal aborts mid-delay', async () => {
+    const controller = new AbortController();
+    const pending = abortableDelay(60_000, controller.signal);
+    controller.abort();
+    await expect(pending).rejects.toMatchObject({ name: 'AbortError' });
   });
 });

@@ -1,4 +1,4 @@
-import { statusText } from '../core/mock/network.ts';
+import { abortableDelay, statusText } from '../core/mock/network.ts';
 import { resolveRequest } from '../core/mock/resolve.ts';
 import type { InterceptedRequest, MockDecision } from '../core/types.ts';
 import { useTraffic, type TrafficEntry } from '../store/traffic.ts';
@@ -133,7 +133,7 @@ function installPagePatch(): void {
         throw error;
       }
     }
-    if (decision.delayMs > 0) await new Promise((r) => setTimeout(r, decision.delayMs));
+    if (decision.delayMs > 0) await abortableDelay(decision.delayMs, request.signal);
     if (decision.kind === 'network-error') throw new TypeError('Failed to fetch (simulated network failure)');
     return new Response(decision.body, { status: decision.status, statusText: statusText(decision.status), headers: decision.headers });
   };

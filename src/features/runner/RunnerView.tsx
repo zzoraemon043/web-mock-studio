@@ -94,6 +94,7 @@ export function RunnerView() {
       if (!BODYLESS.has(method) && body) init.body = body;
       const response = await fetch(url, init);
       const text = method === 'HEAD' ? '' : await response.text();
+      if (controller.signal.aborted) return;
       setResult({
         status: response.status,
         statusText: response.statusText,

@@ -97,3 +97,19 @@ export function toResponseHeaders(rows: readonly { enabled: boolean; key: string
   }
   return out;
 }
+
+/** Waits like setTimeout but rejects with the signal's reason as soon as it aborts. */
+export function abortableDelay(ms: number, signal?: AbortSignal | null): Promise<void> {
+  if (signal?.aborted) return Promise.reject(signal.reason ?? new DOMException('The operation was aborted.', 'AbortError'));
+  return new Promise((resolve, reject) => {
+    const onAbort = () => {
+      clearTimeout(timer);
+      reject(signal?.reason ?? new DOMException('The operation was aborted.', 'AbortError'));
+    };
+    const timer = setTimeout(() => {
+      signal?.removeEventListener('abort', onAbort);
+      resolve();
+    }, ms);
+    signal?.addEventListener('abort', onAbort, { once: true });
+  });
+}
