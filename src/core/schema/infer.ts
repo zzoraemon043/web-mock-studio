@@ -20,7 +20,7 @@ interface Shape {
   numbers: number[];
   allIntegers: boolean;
   strings: string[];
-  arrays: { lengths: number[]; items: Shape } | null;
+  arrays: { minLen: number; maxLen: number; items: Shape } | null;
   objects: { count: number; props: Map<string, Shape>; presence: Map<string, number> } | null;
 }
 
@@ -40,8 +40,9 @@ function observe(shape: Shape, value: unknown): void {
   } else if (typeof value === 'string') {
     if (shape.strings.length < SAMPLE_CAP) shape.strings.push(value);
   } else if (Array.isArray(value)) {
-    shape.arrays ??= { lengths: [], items: emptyShape() };
-    shape.arrays.lengths.push(value.length);
+    shape.arrays ??= { minLen: Infinity, maxLen: -Infinity, items: emptyShape() };
+    shape.arrays.minLen = Math.min(shape.arrays.minLen, value.length);
+    shape.arrays.maxLen = Math.max(shape.arrays.maxLen, value.length);
     for (const item of value) observe(shape.arrays.items, item);
   } else if (typeof value === 'object') {
     shape.objects ??= { count: 0, props: new Map(), presence: new Map() };
@@ -147,8 +148,7 @@ function arraySchema(arrays: NonNullable<Shape['arrays']>, key: string | undefin
   const schema: JsonSchema = { type: 'array' };
   const items = arrays.items.seen > 0 ? toSchema(arrays.items, singularize(key)) : {};
   schema.items = items;
-  const minLen = Math.min(...arrays.lengths);
-  const maxLen = Math.max(...arrays.lengths);
+  const { minLen, maxLen } = arrays;
   if (arrays.items.seen === 0) {
     schema.minItems = 0;
     schema.maxItems = 0;
@@ -192,7 +192,11 @@ function toSchema(shape: Shape, key: string | undefined): JsonSchema {
   const [primary, ...rest] = variants as [JsonSchema, ...JsonSchema[]];
   const types: JsonSchemaType[] = [primary.type as JsonSchemaType, ...rest.map((v) => v.type as JsonSchemaType)];
   if (shape.nulls > 0) types.push('null');
-  if (types.length > 1) primary.type = types;
+  if (types.length > 1) {
+    primary.type = types;
+    // enum applies to every type, so it would reject samples of the other variants
+    if (rest.length > 0) delete primary.enum;
+  }
   return primary;
 }
 

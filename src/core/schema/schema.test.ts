@@ -43,6 +43,20 @@ describe('inferSchema', () => {
     expect(item.properties?.role?.enum).toEqual(['admin', 'member']);
   });
 
+  it('infers very large outer arrays without overflowing the call stack', () => {
+    const big = Array.from({ length: 200000 }, () => [1]);
+    const schema = inferSchema(big);
+    expect(schema.type).toBe('array');
+    expect(schema.items?.type).toBe('array');
+  });
+
+  it('drops enum when a field mixes several types', () => {
+    const schema = inferSchema({ v: ['a', 'a', 'a', 'a', 1] });
+    const items = schema.properties?.v?.items;
+    expect(items?.type).toEqual(['string', 'integer']);
+    expect(items?.enum).toBeUndefined();
+  });
+
   it('marks nullable fields with a type union', () => {
     expect(item.properties?.nickname?.type).toEqual(['string', 'null']);
   });
