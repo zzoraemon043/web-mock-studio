@@ -3,7 +3,7 @@ import { createRng, hashSeed, type Rng } from '../random.ts';
 import { findMatchingRule, type RuleMatch } from '../router/match.ts';
 import { generateRecords } from '../schema/generate.ts';
 import type { DataTemplate, InterceptedRequest, MockDecision, MockRule, WorkspaceSettings } from '../types.ts';
-import { computeDelay, isNullBodyStatus, pickFailure, statusText } from './network.ts';
+import { computeDelay, isNullBodyStatus, pickFailure, statusText, toResponseHeaders } from './network.ts';
 import { interpolate } from './template.ts';
 
 export interface ResolveContext {
@@ -95,10 +95,7 @@ export function resolveRequest(request: InterceptedRequest, ctx: ResolveContext)
 
   if (failure === 'network-error') return { kind: 'network-error', ruleId: rule.id, delayMs };
 
-  const headers: Record<string, string> = {};
-  for (const h of rule.response.headers) {
-    if (h.enabled && h.key.trim()) headers[h.key.trim().toLowerCase()] = h.value;
-  }
+  const headers = toResponseHeaders(rule.response.headers);
   headers[MOCK_HEADER] = 'web-mock-studio';
 
   if (failure !== null) {

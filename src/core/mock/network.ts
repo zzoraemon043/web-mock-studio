@@ -78,3 +78,22 @@ export function parseStatus(text: string): number | null {
 export function isNullBodyStatus(status: number): boolean {
   return status === 101 || status === 103 || status === 204 || status === 205 || status === 304;
 }
+
+const HEADER_NAME_RE = /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/;
+
+/**
+ * Turns rule header rows into a map the Response constructor accepts. A name that is not a
+ * token, or a value with CR, LF or NUL, is dropped; a value with characters above U+00FF is
+ * sent as its UTF-8 bytes, which is what a real server puts on the wire.
+ */
+export function toResponseHeaders(rows: readonly { enabled: boolean; key: string; value: string }[], lowerCase = true): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const row of rows) {
+    if (!row.enabled) continue;
+    const name = row.key.trim();
+    if (!HEADER_NAME_RE.test(name) || /[\r\n\0]/.test(row.value)) continue;
+    const value = /[^\u0000-ÿ]/.test(row.value) ? Array.from(new TextEncoder().encode(row.value), (b) => String.fromCharCode(b)).join('') : row.value;
+    out[lowerCase ? name.toLowerCase() : name] = value.trim();
+  }
+  return out;
+}

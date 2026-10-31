@@ -3,7 +3,7 @@ import { generateRecords } from '../schema/generate.ts';
 import { createContext, fake } from '../faker/faker.ts';
 import { isFakerKind } from '../faker/kinds.ts';
 import { createRng } from '../random.ts';
-import { LATENCY_PROFILES } from '../mock/network.ts';
+import { LATENCY_PROFILES, toResponseHeaders } from '../mock/network.ts';
 import type { DataTemplate, MockRule } from '../types.ts';
 
 export interface SnippetRule {
@@ -203,7 +203,7 @@ export function toSnippetRules(rules: readonly MockRule[], templates: readonly D
         names: patternCaptureNames(rule.pattern),
         query,
         status: rule.response.status,
-        headers: Object.fromEntries(rule.response.headers.filter((h) => h.enabled && h.key).map((h) => [h.key.toLowerCase(), h.value])),
+        headers: toResponseHeaders(rule.response.headers),
         body: template ? null : resolveStaticFakerTokens(rule.response.body, rule.id),
         records: template ? generateRecords(template.schema, rule.response.dataset.count, { seed: `${template.id}:${template.updatedAt}` }) : null,
         envelope: rule.response.dataset.envelope,

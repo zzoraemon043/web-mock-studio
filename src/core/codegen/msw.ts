@@ -1,7 +1,7 @@
 import { compilePattern } from '../router/match.ts';
 import { generateRecords } from '../schema/generate.ts';
 import type { DataTemplate, MockRule } from '../types.ts';
-import { LATENCY_PROFILES } from '../mock/network.ts';
+import { LATENCY_PROFILES, toResponseHeaders } from '../mock/network.ts';
 
 const TOKEN_RE = /\{\{\s*([\w.$-]+)\s*\}\}/g;
 
@@ -69,7 +69,7 @@ function delayFor(rule: MockRule): number {
 function handlerFor(rule: MockRule, templates: readonly DataTemplate[], datasetVars: Map<string, string>): string {
   const method = rule.method === 'ANY' ? 'all' : rule.method.toLowerCase();
   const lines: string[] = [];
-  const headers = Object.fromEntries(rule.response.headers.filter((h) => h.enabled && h.key).map((h) => [h.key, h.value]));
+  const headers = toResponseHeaders(rule.response.headers, false);
   const ms = delayFor(rule);
   if (ms > 0) lines.push(`await delay(${ms});`);
 

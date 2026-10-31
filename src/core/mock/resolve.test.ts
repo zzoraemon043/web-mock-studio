@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { createRule, createTemplate, DEFAULT_NETWORK } from '../defaults.ts';
 import { createRng } from '../random.ts';
 import type { InterceptedRequest, MockDecision, MockRule } from '../types.ts';
-import { computeDelay, parseStatus, pickFailure } from './network.ts';
+import { computeDelay, parseStatus, pickFailure, toResponseHeaders } from './network.ts';
 import { resolveRequest, type ResolveContext } from './resolve.ts';
 import { interpolate } from './template.ts';
 
@@ -139,5 +139,24 @@ describe('network simulation', () => {
     expect(failures / 5000).toBeGreaterThan(0.26);
     expect(failures / 5000).toBeLessThan(0.34);
     expect(pickFailure({ ...network, failureOutcomes: [] }, rng)).toBeNull();
+  });
+});
+
+describe('toResponseHeaders', () => {
+  const row = (key: string, value: string, enabled = true) => ({ enabled, key, value });
+
+  it('drops invalid names and values and keeps the rest', () => {
+    const headers = toResponseHeaders([row('X-Ok', ' 1 '), row('bad name', '1'), row('', '1'), row('x-line', 'a\nb'), row('x-off', '1', false)]);
+    expect(headers).toEqual({ 'x-ok': '1' });
+  });
+
+  it('sends characters above U+00FF as UTF-8 bytes and builds a Response', () => {
+    const headers = toResponseHeaders([row('Content-Disposition', 'attachment; filename="報告.csv"')]);
+    expect(() => new Response('x', { headers })).not.toThrow();
+    expect(new TextDecoder().decode(Uint8Array.from(headers['content-disposition']!, (c) => c.charCodeAt(0)))).toBe('attachment; filename="報告.csv"');
+  });
+
+  it('keeps the original case on request', () => {
+    expect(toResponseHeaders([row('X-Id', '1')], false)).toEqual({ 'X-Id': '1' });
   });
 });
