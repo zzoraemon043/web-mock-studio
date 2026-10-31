@@ -19,6 +19,7 @@ function readPath(source: unknown, path: string[]): unknown {
   let node = source;
   for (const key of path) {
     if (node === null || typeof node !== 'object') return undefined;
+    if (!Object.hasOwn(node, key)) return undefined;
     node = (node as Record<string, unknown>)[key];
   }
   return node;

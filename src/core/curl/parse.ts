@@ -96,12 +96,19 @@ function setHeader(headers: KeyValue[], key: string, value: string, overwrite = 
   headers.push({ key, value, enabled: true });
 }
 
+/** curl percent-encodes everything except unreserved characters; encodeURIComponent also spares !'()*. */
+function curlEncode(text: string): string {
+  return encodeURIComponent(text).replace(/[!'()*]/g, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`);
+}
+
 function encodeUrlencodeArg(arg: string): string {
   const eq = arg.indexOf('=');
   if (arg.startsWith('@')) return arg;
-  if (eq === -1) return encodeURIComponent(arg);
+  if (eq === -1) return curlEncode(arg);
+  // `=content` sends only the encoded content, without a leading name or `=`.
+  if (eq === 0) return curlEncode(arg.slice(1));
   const name = arg.slice(0, eq);
-  return `${name}=${encodeURIComponent(arg.slice(eq + 1))}`;
+  return `${name}=${curlEncode(arg.slice(eq + 1))}`;
 }
 
 export function looksLikeJson(text: string): boolean {

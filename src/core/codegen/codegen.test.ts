@@ -69,4 +69,17 @@ describe('generateInterceptorSnippet', () => {
     expect(await (await win.fetch('/elsewhere')).text()).toBe('real');
     expect(realFetch).toHaveBeenCalledTimes(1);
   });
+
+  it('survives hyphenated params and looks items up by the last param', async () => {
+    const { templates } = createStarterWorkspace();
+    const template = templates[0]!;
+    const rules = [
+      createRule({ pattern: '/api/{team-id}/ping', response: { ...createRule().response, body: '{"team":"{{params.team-id}}"}' } }),
+      createRule({ pattern: '/api/orgs/:orgId/users/:id', response: { ...createRule().response, bodyMode: 'dataset', dataset: { templateId: template.id, count: 5, envelope: 'item' } } }),
+    ];
+    const win = install(generateInterceptorSnippet(rules, templates));
+    expect(await (await win.fetch('/api/acme/ping')).json()).toEqual({ team: 'acme' });
+    const item = await (await win.fetch('/api/orgs/9/users/2')).json();
+    expect(String(item.id)).toBe('2');
+  });
 });

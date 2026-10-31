@@ -105,10 +105,17 @@ function readAnsiC(src: string, start: number): [string, number] {
         i += 2 + hex.length;
         continue;
       }
-      if (n === 'u') {
-        const hex = /^[0-9a-fA-F]{1,4}/.exec(src.slice(i + 2))?.[0] ?? '';
-        out += String.fromCharCode(parseInt(hex || '0', 16));
+      if (n === 'u' || n === 'U') {
+        const hex = (n === 'u' ? /^[0-9a-fA-F]{1,4}/ : /^[0-9a-fA-F]{1,8}/).exec(src.slice(i + 2))?.[0] ?? '';
+        const code = parseInt(hex || '0', 16);
+        out += code <= 0x10ffff ? String.fromCodePoint(code) : '';
         i += 2 + hex.length;
+        continue;
+      }
+      if (n >= '0' && n <= '7') {
+        const oct = /^[0-7]{1,3}/.exec(src.slice(i + 1))?.[0] ?? '0';
+        out += String.fromCharCode(parseInt(oct, 8) & 0xff);
+        i += 1 + oct.length;
         continue;
       }
       out += ANSI_ESCAPES[n] ?? `\\${n}`;

@@ -4,6 +4,7 @@ import { createRng } from '../random.ts';
 import type { InterceptedRequest, MockDecision, MockRule } from '../types.ts';
 import { computeDelay, parseStatus, pickFailure } from './network.ts';
 import { resolveRequest, type ResolveContext } from './resolve.ts';
+import { interpolate } from './template.ts';
 
 const req = (method: string, path: string, body: string | null = null, headers: Record<string, string> = {}): InterceptedRequest => ({
   method,
@@ -29,6 +30,15 @@ function respond(decision: MockDecision) {
   if (decision.kind !== 'respond') throw new Error(`expected respond, got ${decision.kind}`);
   return decision;
 }
+
+describe('template tokens', () => {
+  it('ignores inherited properties and leaves the token visible', () => {
+    const scope = { params: {}, query: { a: '1' }, headers: {}, body: { list: [1, 2] }, method: 'GET', url: new URL('http://x/y'), now: 0, rng: createRng('s') };
+    expect(interpolate('{{query.constructor}}|{{query.toString}}|{{body.__proto__}}|{{body.list.length}}|{{query.a}}', scope)).toBe(
+      '{{query.constructor}}|{{query.toString}}|{{body.__proto__}}|2|1',
+    );
+  });
+});
 
 describe('resolveRequest', () => {
   it('passes through when disabled or unmatched', () => {

@@ -1,4 +1,4 @@
-import { compilePattern, patternToRegExpSource } from '../router/match.ts';
+import { compilePattern, patternCaptureNames, patternToRegExpSource } from '../router/match.ts';
 import { generateRecords } from '../schema/generate.ts';
 import { createContext, fake } from '../faker/faker.ts';
 import { isFakerKind } from '../faker/kinds.ts';
@@ -11,6 +11,7 @@ export interface SnippetRule {
   method: string;
   origin: string | null;
   regex: string;
+  names: string[];
   query: { key: string; value: string; mode: string }[];
   status: number;
   headers: Record<string, string>;
@@ -36,7 +37,7 @@ const RUNTIME = String.raw`
   var originalFetch = window.fetch.bind(window);
 
   function read(obj, path) {
-    return path.reduce(function (n, k) { return n && typeof n === 'object' ? n[k] : undefined; }, obj);
+    return path.reduce(function (n, k) { return n && typeof n === 'object' && Object.prototype.hasOwnProperty.call(n, k) ? n[k] : undefined; }, obj);
   }
 
   function interpolate(text, scope) {
@@ -63,6 +64,14 @@ const RUNTIME = String.raw`
     });
   }
 
+  function captureParams(names, m) {
+    var params = {};
+    names.forEach(function (name, i) {
+      if (m[i + 1] !== undefined && !Object.prototype.hasOwnProperty.call(params, name)) params[name] = m[i + 1];
+    });
+    return params;
+  }
+
   function match(method, rawUrl) {
     var url = new URL(rawUrl, location.href), best = null;
     RULES.forEach(function (rule) {
@@ -70,7 +79,7 @@ const RUNTIME = String.raw`
       if (rule.origin && rule.origin !== url.origin.toLowerCase()) return;
       var m = new RegExp(rule.regex).exec(url.pathname);
       if (!m || !queryOk(rule.query, url.searchParams)) return;
-      if (!best || rule.specificity > best.rule.specificity) best = { rule: rule, params: m.groups || {}, url: url };
+      if (!best || rule.specificity > best.rule.specificity) best = { rule: rule, params: captureParams(rule.names, m), url: url };
     });
     return best;
   }
@@ -95,7 +104,7 @@ const RUNTIME = String.raw`
         var size = Math.max(1, parseInt(sp.get('pageSize') || sp.get('per_page') || sp.get('limit'), 10) || 10);
         body = { data: recs.slice((page - 1) * size, page * size), page: page, pageSize: size, total: recs.length, totalPages: Math.max(1, Math.ceil(recs.length / size)) };
       } else if (rule.envelope === 'item') {
-        var key = Object.keys(hit.params).map(function (k) { return hit.params[k]; })[0];
+        var vals = Object.keys(hit.params).map(function (k) { return hit.params[k]; }), key = vals[vals.length - 1];
         body = recs.filter(function (r) { return r && String(r.id) === key; })[0] || recs[parseInt(key, 10) - 1];
         if (!body) { status = 404; body = { error: 'Not Found' }; }
       } else body = recs;
@@ -191,6 +200,7 @@ export function toSnippetRules(rules: readonly MockRule[], templates: readonly D
         method: rule.method,
         origin: compiled.origin,
         regex: patternToRegExpSource(rule.pattern),
+        names: patternCaptureNames(rule.pattern),
         query,
         status: rule.response.status,
         headers: Object.fromEntries(rule.response.headers.filter((h) => h.enabled && h.key).map((h) => [h.key.toLowerCase(), h.value])),

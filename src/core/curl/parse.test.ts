@@ -26,6 +26,18 @@ describe('tokenizeShell', () => {
   });
 });
 
+describe('tokenizeShell ANSI-C escapes', () => {
+  it('handles octal, \\U and surrogate-pair escapes', () => {
+    expect(tokenizeShell("curl $'a\\033[1m\\101\\U0001F600\\ud83d\\ude00'")).toEqual(['curl', 'a\x1b[1mA\u{1F600}\u{1F600}']);
+  });
+});
+
+describe('--data-urlencode', () => {
+  it('sends only the content for =content and encodes like curl', () => {
+    expect(parseCurl(`curl --data-urlencode '=a b!' --data-urlencode "q=it's (x)" http://x`).body).toBe('a%20b%21&q=it%27s%20%28x%29');
+  });
+});
+
 describe('parseCurl', () => {
   it('parses a Chrome "Copy as cURL" command', () => {
     const parsed = parseCurl(`curl 'https://api.example.com/v1/users?page=2' \\

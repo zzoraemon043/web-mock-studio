@@ -89,25 +89,25 @@ export function compilePattern(pattern: string): CompiledPattern {
 
 export function matchPath(compiled: CompiledPattern, pathname: string): Record<string, string> | null {
   const parts = pathname.split('/').filter(Boolean).map(safeDecode);
-  const params: Record<string, string> = {};
-  let i = 0;
-  for (const segment of compiled.segments) {
-    if (segment.kind === 'wildcard') {
-      params['*'] = parts.slice(i).join('/');
-      return params;
+  const { segments } = compiled;
+
+  // Backtracking walk so an optional param followed by static segments
+  // (`/files/:name?/edit`) can give its slot back when the path is shorter.
+  const walk = (si: number, pi: number): Record<string, string> | null => {
+    const segment = segments[si];
+    if (!segment) return pi === parts.length ? {} : null;
+    if (segment.kind === 'wildcard') return { '*': parts.slice(pi).join('/') };
+    const part = parts[pi];
+    if (segment.kind === 'static') return part === segment.value ? walk(si + 1, pi + 1) : null;
+    if (part !== undefined) {
+      const rest = walk(si + 1, pi + 1);
+      if (rest) return { [segment.name]: part, ...rest };
     }
-    const part = parts[i];
-    if (segment.kind === 'static') {
-      if (part !== segment.value) return null;
-      i++;
-    } else if (part === undefined) {
-      if (!segment.optional) return null;
-    } else {
-      params[segment.name] = part;
-      i++;
-    }
-  }
-  return i === parts.length ? params : null;
+    if (!segment.optional) return null;
+    return walk(si + 1, pi);
+  };
+
+  return walk(0, 0);
 }
 
 function safeRegex(source: string): RegExp | null {
@@ -197,6 +197,17 @@ function escapeRegex(text: string): string {
   return text.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
 }
 
+const GROUP_NAME_RE = /^[A-Za-z_$][\w$]*$/;
+
+/**
+ * Names of the capture groups emitted by `patternToRegExpSource`, in order. Brace params
+ * may contain `-` (`{user-id}`), which is not a legal regex group name, so those groups
+ * are emitted unnamed and callers map them back by position.
+ */
+export function patternCaptureNames(pattern: string): string[] {
+  return compilePattern(pattern).segments.flatMap((s) => (s.kind === 'param' ? [s.name] : s.kind === 'wildcard' ? ['wildcard'] : []));
+}
+
 /**
  * Compiles a path pattern to an anchored RegExp source with named groups, used by code
  * generators so exported snippets need no router runtime. Origin and query conditions
@@ -206,7 +217,7 @@ export function patternToRegExpSource(pattern: string): string {
   const compiled = compilePattern(pattern);
   const seen = new Set<string>();
   const group = (name: string) => {
-    if (seen.has(name)) return '';
+    if (seen.has(name) || !GROUP_NAME_RE.test(name)) return '';
     seen.add(name);
     return `?<${name}>`;
   };

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createRule } from '../defaults.ts';
-import { compilePattern, describePattern, findMatchingRule, matchRoute, patternToRegExpSource } from './match.ts';
+import { compilePattern, describePattern, findMatchingRule, matchRoute, patternCaptureNames, patternToRegExpSource } from './match.ts';
 
 const url = (href: string) => new URL(href, 'http://localhost:5173');
 
@@ -98,5 +98,17 @@ describe('pattern helpers', () => {
     expect(re.test('/api/users')).toBe(false);
     expect(new RegExp(patternToRegExpSource('/v1.0/items')).test('/v1x0/items')).toBe(false);
     expect(() => new RegExp(patternToRegExpSource('/a/:id/b/:id'))).not.toThrow();
+  });
+
+  it('emits a valid regex for hyphenated brace params', () => {
+    const re = new RegExp(patternToRegExpSource('/u/{user-id}/posts/:postId'));
+    expect(re.exec('/u/7/posts/9')?.slice(1)).toEqual(['7', '9']);
+    expect(patternCaptureNames('/u/{user-id}/posts/:postId/*')).toEqual(['user-id', 'postId', 'wildcard']);
+  });
+
+  it('lets an optional param give its slot back to later static segments', () => {
+    expect(matchRoute('/files/:name?/edit', new URL('http://x/files/edit'))?.params).toEqual({});
+    expect(matchRoute('/files/:name?/edit', new URL('http://x/files/a.txt/edit'))?.params).toEqual({ name: 'a.txt' });
+    expect(matchRoute('/files/:name?/edit', new URL('http://x/files/a.txt'))).toBeNull();
   });
 });
