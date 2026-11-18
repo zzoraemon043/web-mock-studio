@@ -136,6 +136,7 @@ function normalizeRequest(v: Obj): SavedRequest {
     url: str(v.url),
     headers: keyValues(v.headers),
     body: str(v.body),
+    ...(Array.isArray(v.multipart) ? { multipart: keyValues(v.multipart) } : {}),
     createdAt: num(v.createdAt, Date.now()),
   };
 }

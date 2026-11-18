@@ -73,9 +73,13 @@ function isActive(clientId) {
 function ask(client, message) {
   return new Promise((resolve) => {
     const channel = new MessageChannel();
-    const timer = setTimeout(() => resolve(null), RESOLVE_TIMEOUT_MS);
+    const timer = setTimeout(() => {
+      channel.port1.close();
+      resolve(null);
+    }, RESOLVE_TIMEOUT_MS);
     channel.port1.onmessage = (event) => {
       clearTimeout(timer);
+      channel.port1.close();
       resolve(event.data);
     };
     client.postMessage(message, [channel.port2]);
@@ -106,7 +110,9 @@ async function handleIntercept(event, client) {
   const request = await serialize(event.request);
   const decision = await ask(client, { protocol: PROTOCOL, type: 'REQUEST', id, request });
 
-  if (!decision || decision.kind === 'passthrough') {
+  if (!decision) return Response.error();
+
+  if (decision.kind === 'passthrough') {
     try {
       const response = await fetch(event.request);
       client.postMessage({ protocol: PROTOCOL, type: 'PASSTHROUGH_RESULT', id, status: response.status, durationMs: Date.now() - started });
@@ -149,6 +155,13 @@ async function shellResponse(request) {
   return cached || network;
 }
 
+function isAppClient(client) {
+  if (client.type !== 'window') return false;
+  const scope = new URL(self.registration.scope);
+  const url = new URL(client.url);
+  return url.origin === scope.origin && (url.pathname === scope.pathname || url.pathname === new URL('index.html', scope).pathname);
+}
+
 self.addEventListener('fetch', (event) => {
   const { request } = event;
   const sameOrigin = new URL(request.url).origin === self.location.origin;
@@ -156,9 +169,11 @@ self.addEventListener('fetch', (event) => {
   // Only programmatic requests (fetch/XHR have an empty destination) are mockable.
   // Documents, scripts, styles and images load untouched, which also prevents a
   // deadlock where the page would be asked to resolve its own bootstrap modules.
-  if (request.mode !== 'navigate' && request.destination === '' && isActive(event.clientId)) {
+  if (request.mode !== 'navigate' && request.destination === '' && event.clientId) {
     event.respondWith(
-      self.clients.get(event.clientId).then((client) => (client ? handleIntercept(event, client) : fetch(request))),
+      self.clients.get(event.clientId).then((client) => (
+        client && (isActive(event.clientId) || isAppClient(client)) ? handleIntercept(event, client) : fetch(request)
+      )),
     );
     return;
   }

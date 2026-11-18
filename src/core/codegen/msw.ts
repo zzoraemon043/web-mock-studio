@@ -1,16 +1,35 @@
-import { compilePattern } from '../router/match.ts';
+import { compilePattern, type CompiledPattern } from '../router/match.ts';
 import { generateRecords } from '../schema/generate.ts';
-import type { DataTemplate, MockRule } from '../types.ts';
+import type { DataTemplate, MockRule, QueryMatcher } from '../types.ts';
 import { LATENCY_PROFILES, toResponseHeaders } from '../mock/network.ts';
 
 const TOKEN_RE = /\{\{\s*([\w.$-]+)\s*\}\}/g;
 
-function mswPath(rule: MockRule): string {
-  const compiled = compilePattern(rule.pattern);
+function mswPath(compiled: CompiledPattern): string {
   const path = compiled.segments
     .map((s) => (s.kind === 'static' ? s.value : s.kind === 'param' ? `:${s.name}${s.optional ? '?' : ''}` : '*'))
     .join('/');
   return `${compiled.origin ?? ''}/${path}`;
+}
+
+function queryMismatch({ key, mode, value }: QueryMatcher): string {
+  const name = JSON.stringify(key);
+  const values = `url.searchParams.getAll(${name})`;
+  switch (mode) {
+    case 'present':
+      return `!url.searchParams.has(${name})`;
+    case 'absent':
+      return `url.searchParams.has(${name})`;
+    case 'equals':
+      return `!${values}.includes(${JSON.stringify(value)})`;
+    case 'regex':
+      try {
+        const source = new RegExp(value).source;
+        return `!${values}.some((value) => /${source}/.test(value))`;
+      } catch {
+        return 'true';
+      }
+  }
 }
 
 function tokenToExpression(expr: string): string | null {
@@ -68,6 +87,9 @@ function delayFor(rule: MockRule): number {
 
 function handlerFor(rule: MockRule, templates: readonly DataTemplate[], datasetVars: Map<string, string>): string {
   const method = rule.method === 'ANY' ? 'all' : rule.method.toLowerCase();
+  const compiled = compilePattern(rule.pattern);
+  const query = [...compiled.impliedQuery, ...rule.query].filter((matcher) => matcher.key);
+  let usesUrl = query.length > 0;
   const lines: string[] = [];
   const headers = toResponseHeaders(rule.response.headers, false);
   const ms = delayFor(rule);
@@ -87,7 +109,7 @@ function handlerFor(rule: MockRule, templates: readonly DataTemplate[], datasetV
   if (rule.response.bodyMode === 'dataset' && template) {
     const variable = datasetVars.get(`${template.id}:${rule.response.dataset.count}`) ?? 'dataset';
     if (rule.response.dataset.envelope === 'paginated') {
-      lines.push('const url = new URL(request.url);');
+      usesUrl = true;
       lines.push(`const page = Math.max(1, Number(url.searchParams.get('page')) || 1);`);
       lines.push(`const pageSize = Math.max(1, Number(url.searchParams.get('pageSize') ?? url.searchParams.get('limit')) || 10);`);
       lines.push(`const data = ${variable}.slice((page - 1) * pageSize, page * pageSize);`);
@@ -102,14 +124,16 @@ function handlerFor(rule: MockRule, templates: readonly DataTemplate[], datasetV
     }
   } else {
     const { code, usesBody } = templateLiteral(rule.response.body);
-    if (code.includes('url.')) lines.unshift('const url = new URL(request.url);');
+    usesUrl ||= code.includes('url.');
     if (usesBody) lines.unshift('const json = await request.clone().json().catch(() => null);');
     const contentType = Object.keys(headers).some((h) => h.toLowerCase() === 'content-type');
     const merged = contentType ? init : `{ status: ${rule.response.status}, headers: ${JSON.stringify({ 'Content-Type': 'application/json', ...headers })} }`;
     lines.push(`return new HttpResponse(${code}, ${merged});`);
   }
 
-  return `  // ${rule.name.replace(/\n/g, ' ')}\n  http.${method}(${JSON.stringify(mswPath(rule))}, async ({ request, params }) => {\n${indent(lines.join('\n'), 4)}\n  }),`;
+  if (query.length) lines.unshift(...query.map((matcher) => `if (${queryMismatch(matcher)}) return;`));
+  if (usesUrl) lines.unshift('const url = new URL(request.url);');
+  return `  // ${rule.name.replace(/[\r\n\u2028\u2029]+/g, ' ')}\n  http.${method}(${JSON.stringify(mswPath(compiled))}, async ({ request, params }) => {\n${indent(lines.join('\n'), 4)}\n  }),`;
 }
 
 /** Emits an MSW v2 handlers module. Dataset rules are snapshotted so the output has no runtime dependency on this tool. */

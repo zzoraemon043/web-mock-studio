@@ -61,6 +61,15 @@ describe('inferSchema', () => {
     expect(item.properties?.nickname?.type).toEqual(['string', 'null']);
   });
 
+  it('includes observed nulls in nullable enums and generated records', () => {
+    const schema = inferSchema([{ status: 'active' }, { status: null }]);
+    expect(schema.items?.properties?.status).toMatchObject({
+      type: ['string', 'null'],
+      enum: expect.arrayContaining(['active', null]),
+    });
+    expect(generateRecords(schema, 50, { seed: 'status' })).toContainEqual({ status: null });
+  });
+
   it('derives array length bounds and singular item names', () => {
     expect(item.properties?.tags).toMatchObject({ type: 'array', minItems: 0, maxItems: 2 });
     expect(item.properties?.tags?.items?.type).toBe('string');

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createRule, createStarterWorkspace } from '../defaults.ts';
+import { createRule, createSavedRequest, createStarterWorkspace } from '../defaults.ts';
 import { mergeWorkspace, parseWorkspace, serializeWorkspace, WORKSPACE_FORMAT } from './io.ts';
 
 describe('workspace io', () => {
@@ -18,6 +18,17 @@ describe('workspace io', () => {
     expect(parseWorkspace('[]').ok).toBe(false);
     expect(parseWorkspace('{"format":"other","rules":[]}').ok).toBe(false);
     expect(parseWorkspace('{"hello":1}').ok).toBe(false);
+  });
+
+  it('round-trips saved multipart fields', () => {
+    const data = createStarterWorkspace();
+    const request = createSavedRequest({
+      method: 'POST',
+      url: '/upload',
+      multipart: [{ key: 'name', value: 'Ada & Bob', enabled: true }],
+    });
+    const result = parseWorkspace(serializeWorkspace({ ...data, requests: [request] }));
+    expect(result).toMatchObject({ ok: true, data: { requests: [request] } });
   });
 
   it('sanitizes and clamps untrusted fields', () => {

@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import type { KeyValue } from '../core/types.ts';
 
 export const TOOLS = ['mocks', 'factory', 'runner', 'workspace'] as const;
 export type ToolId = (typeof TOOLS)[number];
@@ -14,8 +15,9 @@ export interface Toast {
 export interface RunnerDraft {
   method: string;
   url: string;
-  headers: { key: string; value: string; enabled: boolean }[];
+  headers: KeyValue[];
   body: string;
+  multipart?: KeyValue[];
   savedId?: string;
 }
 

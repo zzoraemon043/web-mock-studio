@@ -196,6 +196,7 @@ function toSchema(shape: Shape, key: string | undefined): JsonSchema {
     primary.type = types;
     // enum applies to every type, so it would reject samples of the other variants
     if (rest.length > 0) delete primary.enum;
+    else if (shape.nulls > 0 && primary.enum) primary.enum.push(null);
   }
   return primary;
 }

@@ -60,7 +60,6 @@ export function createTemplate(name: string, sample: string): DataTemplate {
 
 export function createSavedRequest(partial: Partial<SavedRequest> = {}): SavedRequest {
   return {
-    id: createId('req'),
     name: 'Untitled request',
     method: 'GET',
     url: '',
@@ -68,6 +67,7 @@ export function createSavedRequest(partial: Partial<SavedRequest> = {}): SavedRe
     body: '',
     createdAt: Date.now(),
     ...partial,
+    id: partial.id ?? createId('req'),
   };
 }
 

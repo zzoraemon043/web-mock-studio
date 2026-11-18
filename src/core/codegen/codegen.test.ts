@@ -29,12 +29,55 @@ describe('generateMswHandlers', () => {
     const rule = createRule({ response: { ...createRule().response, body: '`${x}` {{params.id}}' } });
     expect(generateMswHandlers([rule], [])).toContain('\\`\\${x}\\` ${String(params["id"] ?? \'\')}');
   });
+
+  it.each(['\n', '\r', '\r\n', '\u2028', '\u2029'])('keeps the rule label on one comment line (%j)', (separator) => {
+    const rule = createRule({ name: `First${separator}Second` });
+    expect(generateMswHandlers([rule], [])).toContain('  // First Second\n  http.get(');
+  });
+
+  it('falls through on mismatched pattern and editor query conditions', async () => {
+    const response = createRule().response;
+    const rule = createRule({
+      pattern: '/search?type=user',
+      query: [
+        { key: 'tag', mode: 'regex', value: '^staff$' },
+        { key: 'active', mode: 'present', value: '' },
+        { key: 'archived', mode: 'absent', value: '' },
+        { key: '', mode: 'equals', value: 'ignored' },
+      ],
+      response: { ...response, body: '{{query.type}}' },
+    });
+    const fallback = createRule({ pattern: '/search', response: { ...response, body: 'fallback' } });
+    const code = generateMswHandlers([rule, fallback], [])
+      .replace(/^import .*;$/m, '')
+      .replace('export const handlers =', 'return');
+    type Resolver = (args: { request: Request; params: object }) => Promise<Response | undefined>;
+    const handlers = new Function('http', 'HttpResponse', code)({
+      get: (_path: string, resolver: Resolver) => resolver,
+    }, Response) as Resolver[];
+    const send = async (query: string) => {
+      const request = new Request(`https://example.com/search?${query}`);
+      for (const handler of handlers) {
+        const response = await handler({ request, params: {} });
+        if (response) return response.text();
+      }
+    };
+
+    expect(await send('type=user&tag=other&tag=staff&active')).toBe('user');
+    for (const query of ['type=order&tag=staff&active', 'type=user&tag=other&active', 'type=user&tag=staff', 'type=user&tag=staff&active&archived']) {
+      expect(await send(query)).toBe('fallback');
+    }
+  });
 });
 
 describe('generateInterceptorSnippet', () => {
-  const realFetch = vi.fn(async () => new Response('real'));
+  const realFetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const request = new Request(input instanceof Request ? input : new URL(String(input), 'http://localhost:3000'), init);
+    return new Response(request.method === 'GET' ? 'real' : await request.text());
+  });
 
   afterEach(() => {
+    realFetch.mockClear();
     delete (globalThis as Record<string, unknown>).window;
     delete (globalThis as Record<string, unknown>).location;
   });
@@ -81,5 +124,13 @@ describe('generateInterceptorSnippet', () => {
     expect(await (await win.fetch('/api/acme/ping')).json()).toEqual({ team: 'acme' });
     const item = await (await win.fetch('/api/orgs/9/users/2')).json();
     expect(String(item.id)).toBe('2');
+  });
+
+  it('passes an unmatched POST Request to native fetch with its body intact', async () => {
+    const win = install(generateInterceptorSnippet([], []));
+    const request = new Request('http://localhost:3000/elsewhere', { method: 'POST', body: 'payload' });
+    const response = await win.fetch(request);
+    expect(await response.text()).toBe('payload');
+    expect(realFetch).toHaveBeenCalledTimes(1);
   });
 });

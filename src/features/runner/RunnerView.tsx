@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Bookmark, Copy, FileCode, Loader2, Route, Send, Square, TerminalSquare, Trash2, TriangleAlert } from 'lucide-react';
 import { HTTP_METHODS, type HttpMethod, type KeyValue } from '../../core/types.ts';
-import { toCurl, toFetch } from '../../core/curl/serialize.ts';
+import { multipartFields, requestHeaderEntries, toCurl, toFetch } from '../../core/curl/serialize.ts';
 import { parseCurl } from '../../core/curl/parse.ts';
 import { MOCK_HEADER } from '../../core/mock/resolve.ts';
 import { useUi } from '../../store/ui.ts';
@@ -23,6 +23,7 @@ interface RunResult {
   size: number;
   mocked: boolean;
   url: string;
+  method: HttpMethod;
 }
 
 interface RunFailure {
@@ -46,6 +47,7 @@ export function RunnerView() {
   const [url, setUrl] = useState('/api/users?page=1&pageSize=5');
   const [headers, setHeaders] = useState<KeyValue[]>([]);
   const [body, setBody] = useState('');
+  const [multipart, setMultipart] = useState<KeyValue[]>();
   const [savedId, setSavedId] = useState<string | undefined>();
   const [tab, setTab] = useState<'headers' | 'body'>('headers');
   const [responseTab, setResponseTab] = useState<'body' | 'headers'>('body');
@@ -61,15 +63,16 @@ export function RunnerView() {
     setUrl(next.url);
     setHeaders(next.headers);
     setBody(next.body);
+    setMultipart(next.multipart);
     setSavedId(next.savedId);
-    setTab(next.body ? 'body' : 'headers');
+    setTab(next.body || next.multipart ? 'body' : 'headers');
     setResult(null);
     setFailure(null);
   }, [draft, consumeDraft]);
 
   useEffect(() => () => abort.current?.abort(), []);
 
-  const spec = { method, url, headers, body };
+  const spec = { method, url, headers, body, multipart };
   const absoluteUrl = (() => {
     try {
       return new URL(url, location.href).href;
@@ -87,7 +90,8 @@ export function RunnerView() {
     setFailure(null);
     const started = performance.now();
     try {
-      const sentHeaders = headers.filter((h) => h.enabled && h.key.trim()).map((h): [string, string] => [h.key.trim(), h.value]);
+      const fields = multipartFields(spec);
+      const sentHeaders = requestHeaderEntries(headers, fields.length > 0);
       const badHeader = invalidHeaderReason(sentHeaders);
       if (badHeader) {
         setResult(null);
@@ -95,7 +99,11 @@ export function RunnerView() {
         return;
       }
       const init: RequestInit = { method, headers: sentHeaders, signal: controller.signal };
-      if (!BODYLESS.has(method) && body) init.body = body;
+      if (fields.length) {
+        const form = new FormData();
+        for (const { key, value } of fields) form.append(key, value);
+        init.body = form;
+      } else if (!BODYLESS.has(method) && body) init.body = body;
       const response = await fetch(url, init);
       const text = method === 'HEAD' ? '' : await response.text();
       if (controller.signal.aborted) return;
@@ -107,7 +115,8 @@ export function RunnerView() {
         durationMs: Math.round(performance.now() - started),
         size: new Blob([text]).size,
         mocked: response.headers.has(MOCK_HEADER),
-        url: response.url || absoluteUrl,
+        url: absoluteUrl,
+        method,
       });
       setResponseTab('body');
     } catch (err) {
@@ -135,10 +144,12 @@ export function RunnerView() {
 
   const createMock = () => {
     const contentType = result?.headers.find(([k]) => k.toLowerCase() === 'content-type')?.[1];
+    const ruleMethod = result?.method ?? method;
+    const pattern = patternFromUrl(result?.url ?? url);
     createAndSelectRule({
-      name: `${method} ${patternFromUrl(url)}`,
-      method,
-      pattern: patternFromUrl(url),
+      name: `${ruleMethod} ${pattern}`,
+      method: ruleMethod,
+      pattern,
       response: {
         status: result && result.status >= 200 ? result.status : 200,
         headers: contentType ? [{ key: 'Content-Type', value: contentType, enabled: true }] : [],
@@ -151,7 +162,7 @@ export function RunnerView() {
   };
 
   const save = () => {
-    const saved = saveRequest({ id: savedId, name: savedId ? requests.find((r) => r.id === savedId)?.name : `${method} ${patternFromUrl(url)}`, method, url, headers, body });
+    const saved = saveRequest({ ...spec, id: savedId, name: savedId ? requests.find((r) => r.id === savedId)?.name : `${method} ${patternFromUrl(url)}` });
     setSavedId(saved.id);
     toast('Request saved', 'success');
   };
@@ -183,6 +194,7 @@ export function RunnerView() {
                   setUrl(r.url);
                   setHeaders(r.headers);
                   setBody(r.body);
+                  setMultipart(r.multipart);
                   setSavedId(r.id);
                   setResult(null);
                   setFailure(null);
@@ -238,7 +250,9 @@ export function RunnerView() {
                   setMethod(parsed.method);
                   setUrl(parsed.url);
                   setHeaders(parsed.headers);
-                  setBody(parsed.bodyKind === 'multipart' ? parsed.form.map((f) => `${f.key}=${f.value}`).join('&') : parsed.body);
+                  setBody(parsed.body);
+                  setMultipart(parsed.bodyKind === 'multipart' ? parsed.form : undefined);
+                  if (parsed.bodyKind === 'multipart') setTab('body');
                   setSavedId(undefined);
                   toast(parsed.warnings.length ? `cURL imported with ${parsed.warnings.length} warning(s)` : 'cURL command imported', parsed.warnings.length ? 'info' : 'success');
                 } catch (err) {
@@ -290,7 +304,11 @@ export function RunnerView() {
           ) : (
             <div>
               {BODYLESS.has(method) && <p className="mb-1.5 text-[11px] text-warn">{method} requests cannot carry a body in browsers; it will not be sent.</p>}
-              <CodeEditor label="Request body" value={body} onChange={setBody} minHeight={140} className="h-40" onSubmit={() => void send()} placeholder='{ "name": "value" }' />
+              {multipart ? (
+                <KeyValueEditor items={multipart} onChange={setMultipart} keyPlaceholder="Field name" addLabel="Add form field" />
+              ) : (
+                <CodeEditor label="Request body" value={body} onChange={setBody} minHeight={140} className="h-40" onSubmit={() => void send()} placeholder='{ "name": "value" }' />
+              )}
             </div>
           )}
         </div>

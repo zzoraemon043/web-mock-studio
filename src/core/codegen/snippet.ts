@@ -127,7 +127,7 @@ const RUNTIME = String.raw`
     var bodyPromise = req.method === 'GET' || req.method === 'HEAD' ? Promise.resolve('') : req.clone().text();
     return bodyPromise.then(function (bodyText) {
       var res = resolve(req.method, req.url, headers, bodyText);
-      if (!res) return originalFetch(input, init);
+      if (!res) return originalFetch(req);
       return sleep(res.delay).then(function () {
         if (res.networkError) throw new TypeError('Failed to fetch (simulated by Web Mock Studio)');
         return new Response(res.body, { status: res.status, headers: res.headers });

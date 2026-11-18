@@ -30,11 +30,15 @@ export function CurlImportModal() {
 
   const close = () => setOpen(false);
   const parsed = result.parsed;
-  const body = parsed ? (parsed.bodyKind === 'multipart' ? parsed.form.map((f) => `${f.key}=${f.value}`).join('&') : parsed.body) : '';
-
   const load = () => {
     if (!parsed) return;
-    openInRunner({ method: parsed.method, url: parsed.url, headers: parsed.headers, body });
+    openInRunner({
+      method: parsed.method,
+      url: parsed.url,
+      headers: parsed.headers,
+      body: parsed.body,
+      multipart: parsed.bodyKind === 'multipart' ? parsed.form : undefined,
+    });
     setText('');
     close();
     toast('cURL command loaded into the runner', 'success');

@@ -77,6 +77,7 @@ export interface SavedRequest {
   url: string;
   headers: KeyValue[];
   body: string;
+  multipart?: KeyValue[];
   createdAt: number;
 }
 

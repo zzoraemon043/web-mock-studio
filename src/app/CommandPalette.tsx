@@ -110,7 +110,7 @@ function useCommands(): Command[] {
         group: 'Saved requests',
         icon: Send,
         keywords: r.url,
-        run: () => ui.openInRunner({ method: r.method, url: r.url, headers: r.headers, body: r.body, savedId: r.id }),
+        run: () => ui.openInRunner({ method: r.method, url: r.url, headers: r.headers, body: r.body, multipart: r.multipart, savedId: r.id }),
       })),
     ];
     return commands;

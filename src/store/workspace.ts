@@ -111,6 +111,13 @@ export const useWorkspace = create<WorkspaceState>()(
       version: 1,
       storage: createJSONStorage(() => workspaceStorage),
       partialize: (s) => ({ rules: s.rules, templates: s.templates, requests: s.requests, settings: s.settings }),
+      merge: (persisted, current) => {
+        const data = persisted as Partial<WorkspaceData> | undefined;
+        const requests = (data?.requests ?? current.requests).map((request) =>
+          request.id ? request : { ...request, id: createId('req') },
+        );
+        return { ...current, ...data, requests };
+      },
       onRehydrateStorage: () => () => {
         useWorkspace.setState({ hydrated: true });
       },

@@ -154,4 +154,19 @@ describe('serializers', () => {
     expect(code).toContain('method: "POST"');
     expect(code).not.toContain('X-Off');
   });
+
+  it('serializes multipart text fields with browser- or cURL-generated boundaries', () => {
+    const multipart = [{ key: 'name', value: '@Ada & Bob', enabled: true }];
+    const request = { ...spec, body: '', multipart };
+    const parsed = parseCurl(toCurl(request));
+    expect(parsed.bodyKind).toBe('multipart');
+    expect(parsed.form).toEqual(multipart);
+    expect(parsed.warnings).toEqual([]);
+    expect(parsed.headers).toEqual([]);
+
+    const code = toFetch(request);
+    expect(code).toContain('const body = new FormData();');
+    expect(code).toContain('body.append("name", "@Ada & Bob");');
+    expect(code).not.toContain('Content-Type');
+  });
 });
